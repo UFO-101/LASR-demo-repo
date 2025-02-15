@@ -19,3 +19,7 @@ class TrainingConfig:
     # Visualization parameters
     vis_batch_size: int = 8
     print_every: int = 100  # Print loss every N batches
+
+    # Weights & Biases settings
+    wandb_project: str = "lasr-demo"
+    wandb_entity: str = "josephmiller101"  # Usually your username or organization

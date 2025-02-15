@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import wandb
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 
@@ -42,6 +43,13 @@ class MLPAutoencoder(nn.Module):
 
 
 def train_autoencoder(config: TrainingConfig) -> Tuple[MLPAutoencoder, List[float]]:
+    # Initialize wandb
+    wandb.init(
+        project=config.wandb_project,
+        entity=config.wandb_entity,
+        config=config.__dict__,
+    )
+
     # Load MNIST dataset
     transform = transforms.Compose([transforms.ToTensor()])
 
@@ -53,6 +61,8 @@ def train_autoencoder(config: TrainingConfig) -> Tuple[MLPAutoencoder, List[floa
 
     # Initialize model, loss, and optimizer
     model = MLPAutoencoder(config)
+    wandb.watch(model)  # Log model gradients and parameters
+
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
 
@@ -63,6 +73,7 @@ def train_autoencoder(config: TrainingConfig) -> Tuple[MLPAutoencoder, List[floa
         model.train()
         total_loss = 0
 
+        data = None
         for batch_idx, (data, _) in enumerate(train_loader):
             # Forward pass
             output = model(data)
@@ -79,12 +90,47 @@ def train_autoencoder(config: TrainingConfig) -> Tuple[MLPAutoencoder, List[floa
                 print(
                     f"Epoch: {epoch + 1}/{config.epochs}, Batch: {batch_idx}/{len(train_loader)}, Loss: {loss.item():.6f}"
                 )
+                # Log batch metrics
+                wandb.log({"batch_loss": loss.item()})
 
         avg_loss = total_loss / len(train_loader)
         train_losses.append(avg_loss)
         print(f"Epoch: {epoch + 1}/{config.epochs}, Average Loss: {avg_loss:.6f}")
 
+        # Log sample reconstructions periodically
+        if (epoch + 1) % 2 == 0:  # Every 2 epochs
+            assert data is not None
+            log_reconstruction_images(model, data[:8], epoch)
+
+    wandb.finish()
     return model, train_losses
+
+
+def log_reconstruction_images(
+    model: MLPAutoencoder, data: torch.Tensor, epoch: int
+) -> None:
+    """Log original and reconstructed images to wandb."""
+    model.eval()
+    with torch.no_grad():
+        reconstructions = model(data)
+
+    # Create pairs of original and reconstructed images
+    images = []
+    for i in range(min(4, len(data))):  # Show 4 pairs
+        # Combine original and reconstruction into one image
+        combined = torch.cat(
+            [data[i].cpu().squeeze(), reconstructions[i].cpu().view(28, 28)],
+            dim=1,  # Concatenate horizontally
+        )
+        images.append(
+            wandb.Image(
+                combined.numpy(),
+                caption=f"Pair {i}: Original (left) vs Reconstructed (right)",
+            )
+        )
+
+    wandb.log({"reconstructions": images})
+    model.train()
 
 
 def visualize_reconstruction(model: MLPAutoencoder, config: TrainingConfig) -> None:
@@ -105,21 +151,20 @@ def visualize_reconstruction(model: MLPAutoencoder, config: TrainingConfig) -> N
     with torch.no_grad():
         reconstructions = model(data)
 
-    # Plot original and reconstructed images
-    fig, axes = plt.subplots(2, 8, figsize=(15, 4))
+    # Plot original and reconstructed images side by side
+    fig, axes = plt.subplots(4, 2, figsize=(8, 12))
+    plt.suptitle("Original vs Reconstructed Images")
 
-    for i in range(8):
-        # Original images
-        axes[0, i].imshow(data[i].cpu().squeeze(), cmap="gray")
-        axes[0, i].axis("off")
-        if i == 0:
-            axes[0, i].set_title("Original")
+    for i in range(4):  # Show 4 pairs of images
+        # Original image on the left
+        axes[i, 0].imshow(data[i].cpu().squeeze(), cmap="gray")
+        axes[i, 0].axis("off")
+        axes[i, 0].set_title("Original")
 
-        # Reconstructed images
-        axes[1, i].imshow(reconstructions[i].cpu().view(28, 28), cmap="gray")
-        axes[1, i].axis("off")
-        if i == 0:
-            axes[1, i].set_title("Reconstructed")
+        # Reconstructed image on the right
+        axes[i, 1].imshow(reconstructions[i].cpu().view(28, 28), cmap="gray")
+        axes[i, 1].axis("off")
+        axes[i, 1].set_title("Reconstructed")
 
     plt.tight_layout()
     plt.show()
@@ -127,19 +172,14 @@ def visualize_reconstruction(model: MLPAutoencoder, config: TrainingConfig) -> N
 
 if __name__ == "__main__":
     # Create config
-    config = TrainingConfig(epochs=6)
+    config = TrainingConfig(
+        epochs=6,
+        wandb_project="lasr-demo",
+    )
 
     # Train the model
     model, losses = train_autoencoder(config)
     # %%
-
-    # Plot training losses
-    plt.figure(figsize=(10, 5))
-    plt.plot(losses)
-    plt.title("Training Loss Over Time")
-    plt.xlabel("Epoch")
-    plt.ylabel("Loss")
-    plt.show()
 
     # Visualize some reconstructions
     visualize_reconstruction(model, config)

@@ -22,6 +22,7 @@ dev = [
     "ipykernel>=6.29.5",
     "pre-commit>=4.1.0",
     "pyright>=1.1.394",
+    "wandb>=0.19.6",
 ]
 
 [tool.ruff]
