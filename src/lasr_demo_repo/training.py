@@ -1,6 +1,4 @@
 # %%
-#!%load_ext autoreload
-#!%autoreload 2
 
 from typing import List, Tuple
 
@@ -73,11 +71,12 @@ def train_autoencoder(config: TrainingConfig) -> Tuple[MLPAutoencoder, List[floa
         model.train()
         total_loss = 0
 
-        data = None
-        for batch_idx, (data, _) in enumerate(train_loader):
+        data_BWH = None
+        for batch_idx, batch in enumerate(train_loader):
             # Forward pass
-            output = model(data)
-            loss = criterion(output, data.view(data.size(0), -1))
+            data_BWH = batch[0]
+            output_BL = model(data_BWH)
+            loss = criterion(output_BL, data_BWH.view(data_BWH.shape[0], -1))
 
             # Backward pass and optimize
             optimizer.zero_grad()
@@ -99,8 +98,8 @@ def train_autoencoder(config: TrainingConfig) -> Tuple[MLPAutoencoder, List[floa
 
         # Log sample reconstructions periodically
         if (epoch + 1) % 2 == 0:  # Every 2 epochs
-            assert data is not None
-            log_reconstruction_images(model, data[:8], epoch)
+            assert data_BWH is not None
+            log_reconstruction_images(model, data_BWH[:8], epoch)
 
     wandb.finish()
     return model, train_losses
