@@ -8,7 +8,7 @@
     "editor.defaultFormatter": "charliermarsh.ruff",
     "editor.formatOnSaveMode": "file"
   },
-  "python.analysis.typeCheckingMode": "standard",
+  "python.analysis.typeCheckingMode": "basic",
   "python.languageServer": "Pylance",
   "editor.rulers": [
     88
